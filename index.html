@@ -35,6 +35,32 @@
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+        /* iOS Picker Style */
+        .picker-mask {
+            background: linear-gradient(to bottom, 
+                rgba(255,255,255,1) 0%, 
+                rgba(255,255,255,0.8) 15%, 
+                rgba(255,255,255,0) 40%, 
+                rgba(255,255,255,0) 60%, 
+                rgba(255,255,255,0.8) 85%, 
+                rgba(255,255,255,1) 100%
+            );
+            pointer-events: none;
+        }
+        .wheel-item {
+            height: 60px; /* Өндөр */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #374151;
+            font-size: 1.1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 20px;
+        }
     </style>
 </head>
 <body class="flex items-center justify-center p-4 h-screen w-screen">
@@ -73,20 +99,30 @@
 
         <div class="lg:col-span-5 flex flex-col items-center justify-center h-full relative py-2 overflow-hidden">
             
-            <div class="text-center mb-4 w-full flex-shrink-0">
+            <div class="text-center mb-6 w-full flex-shrink-0">
                 <span id="prizeTag" class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide mb-2 inline-block">
                     Ээлжит шагнал
                 </span>
-                <div class="relative w-full h-56 mb-2 flex items-center justify-center">
+                <div class="relative w-full h-48 mb-2 flex items-center justify-center">
                     <img id="prizeImage" src="" alt="Prize" class="max-h-full max-w-full object-contain drop-shadow-xl transition-all duration-500 transform">
                 </div>
                 <h2 id="prizeName" class="text-xl font-bold text-gray-800 truncate px-2">...</h2>
                 <p id="prizeCounter" class="text-sm text-gray-500 font-medium">Үлдэгдэл: -</p>
             </div>
 
-            <div id="resultArea" class="w-full h-32 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 mb-4 flex-shrink-0 transition-colors duration-300">
-                <p class="text-gray-400 text-xs uppercase tracking-widest mb-1">Азтан</p>
-                <h1 id="winnerText" class="text-3xl font-extrabold text-gray-400 truncate max-w-full px-4">???</h1>
+            <div class="relative w-full h-48 bg-white rounded-xl border-2 border-indigo-200 shadow-inner mb-6 overflow-hidden select-none">
+                
+                <div id="wheelTrack" class="absolute w-full text-center z-0 will-change-transform" style="padding-top: 66px; transform: translateY(0px);">
+                    <div class="wheel-item text-gray-400 font-normal">???</div>
+                </div>
+
+                <div class="absolute top-[66px] w-full h-[60px] border-y-2 border-indigo-400/30 z-10 pointer-events-none"></div>
+                
+                <div class="absolute inset-0 z-20 picker-mask"></div>
+
+                <div id="finalResultOverlay" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity duration-500">
+                    <h1 id="finalWinnerText" class="text-3xl font-extrabold text-indigo-700 winner-anim px-4 text-center"></h1>
+                </div>
             </div>
 
             <button onclick="startLottery()" id="startBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:scale-105 transition transform text-lg flex-shrink-0">
@@ -115,21 +151,21 @@
     </div>
 
     <script>
-        // --- АУДИО УДИРДЛАГА ---
         const drumSound = document.getElementById('drumSound');
         const winSound = document.getElementById('winSound');
 
-        // 1. ТОХИРГОО
         const prizesConfig = [
-            { id: 'nura', name: "Nura - Эрхийн бичиг", total: 3, current: 0, img: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=600&q=80" },
-            { id: 'pcmall', name: "PC Mall - 1 сая ₮", total: 2, current: 0, img: "https://images.unsplash.com/photo-1550009158-9ebf69056955?auto=format&fit=crop&w=600&q=80" },
-            { id: 'iphone', name: "iPhone 17", total: 2, current: 0, img: "https://images.unsplash.com/photo-1696446701796-da61225697cc?auto=format&fit=crop&w=600&q=80" },
-            { id: 'travel', name: "Аяллын эрх (Super)", total: 1, current: 0, img: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=600&q=80" }
+            { id: 'nura', name: "Nura - Эрхийн бичиг", total: 3, current: 0, img: "./prize/Nura.png" },
+            { id: 'pcmall', name: "PC Mall - 1 сая ₮", total: 2, current: 0, img: "./prize/GIFTCARD-100.png" },
+            { id: 'iphone', name: "iPhone 17", total: 2, current: 0, img: "./prize/iphone17.png" },
+            { id: 'travel', name: "Аяллын эрх (Super)", total: 1, current: 0, img: "./prize/Travel-Choice-Gift-Card-GC-UK_Online.jpeg" }
         ];
 
         let currentPrizeIndex = 0;
         let participants = [];
         let winnersCount = 0;
+        let isSpinning = false;
+        let lastVisibleName = "???";
 
         updateList();
         updatePrizeUI();
@@ -161,20 +197,16 @@
                             added++;
                         }
                     });
-                    if (added === 0) alert("Нэр олдсонгүй. Баганын нэр: 'Ovog', 'Ner' байх ёстой.");
-                    else {
-                        alert(`${added} хүн нэмэгдлээ.`);
-                        updateList();
-                    }
+                    alert(`${added} хүн нэмэгдлээ.`);
+                    updateList();
                 } catch (err) { alert("Файл уншихад алдаа гарлаа."); }
                 input.value = '';
             };
             reader.readAsArrayBuffer(file);
         }
 
-        // --- СУГАЛААНЫ ГОЛ ЛОГИК ---
-        let isSpinning = false;
-
+        // --- IMPROVED WHEEL LOGIC (FIXED STOP POINT) ---
+        
         function startLottery() {
             if (participants.length === 0) {
                 alert("Оролцогч байхгүй байна!");
@@ -183,72 +215,100 @@
             if (isSpinning) return;
             isSpinning = true;
 
-            // 1. Хөгжим эхлүүлэх (Drumroll)
             try {
                 drumSound.currentTime = 0;
-                drumSound.volume = 1.0; // Дууг чангалах
+                drumSound.volume = 1.0;
                 drumSound.play();
-            } catch (e) { console.log("Audio error:", e); }
+            } catch (e) {}
 
             const btn = document.getElementById('startBtn');
-            const resultArea = document.getElementById('resultArea');
-            const winnerText = document.getElementById('winnerText');
-
             btn.disabled = true;
-            btn.innerText = "🥁 Азтан тодрох гэж байна...";
+            btn.innerText = "🥁 ...";
             btn.classList.add('opacity-75', 'cursor-not-allowed');
             
-            resultArea.className = "w-full h-32 flex flex-col items-center justify-center bg-white rounded-xl border-2 border-indigo-200 mb-4 shadow-inner";
-            winnerText.classList.remove('text-indigo-600', 'scale-125');
-            winnerText.classList.add('text-gray-600');
+            document.getElementById('finalResultOverlay').classList.add('hidden');
 
-            // Animation settings
-            let speed = 50; 
-            let startTime = Date.now();
-            let duration = 6500; // 6.5 секунд (Хөгжимтэй тааруулав)
+            // 1. Ялагчийг сонгох
+            const winnerIndex = Math.floor(Math.random() * participants.length);
+            const winner = participants[winnerIndex];
 
-            function spin() {
-                const randomIndex = Math.floor(Math.random() * participants.length);
-                const p = participants[randomIndex];
-                winnerText.innerText = `${p.ovog} ${p.ner}`;
-
-                let elapsed = Date.now() - startTime;
-                if (elapsed > (duration - 3000)) speed += 50; // Сүүлийн 3 секундэд удаашрах
-
-                if (elapsed < duration) {
-                    setTimeout(spin, speed);
-                } else {
-                    selectFinalWinner();
-                }
+            // 2. Animation бэлтгэл
+            const track = document.getElementById('wheelTrack');
+            const ITEM_HEIGHT = 60;
+            const SPINS_COUNT = 100; // Increased random spins 
+            
+            // 3. HTML String угсрах
+            let html = '';
+            
+            // A. ЭХНИЙ ITEM: Одоо харагдаж байгаа нэрийг эхэнд нь тавина
+            html += `<div class="wheel-item text-gray-500">${lastVisibleName}</div>`;
+            
+            // B. ДУНДЫН ITEMS: Санамсаргүй нэрс
+            for (let i = 0; i < SPINS_COUNT; i++) {
+                const r = participants[Math.floor(Math.random() * participants.length)];
+                html += `<div class="wheel-item opacity-60">${r.ovog} ${r.ner}</div>`;
             }
-            spin();
+
+            // C. ТӨГСГӨЛИЙН ITEM: Ялагч
+            html += `<div class="wheel-item font-bold text-indigo-800 scale-110">${winner.ovog} ${winner.ner}</div>`;
+            
+            // D. BUFFER ITEMS: Ялагчийн дараа харагдах нэрийг багтаахын тулд нэмнэ
+            // Энд нэг жинхэнэ оролцогчийн нэрийг нэмж харуулъя (тусгайлан сонгох шаардлагагүй, random байж болно)
+            const nextP = participants[Math.floor(Math.random() * participants.length)];
+            html += `<div class="wheel-item text-sm">${nextP.ovog} ${nextP.ner}</div>`;
+            html += `<div class="wheel-item"></div><div class="wheel-item"></div>`; // 2 хоосон зай
+
+            // 4. DOM шинэчлэх
+            track.style.transition = 'none';
+            track.style.transform = 'translateY(0px)';
+            track.innerHTML = html;
+
+            void track.offsetHeight; // FORCE REFLOW
+
+            // 5. START ANIMATION
+            const duration = 6000; // 6 sec
+            
+            // 1 (LastVisible) + 100 (Randoms) = 101 items before the winner
+            const ITEMS_BEFORE_WINNER = SPINS_COUNT + 1; 
+            const targetY = ITEMS_BEFORE_WINNER * ITEM_HEIGHT; // 6060px
+
+            // VISUAL CORRECTION: 5px-ээр доошлуулах нь дараах нэрийг тасралтгүй харагдуулна
+            const visualCorrection = 5; 
+
+            track.style.transition = `transform ${duration}ms cubic-bezier(0.2, 0.8, 0.2, 1)`; 
+            // - (targetY - visualCorrection) - negative transform moves the content UP
+            // By decreasing targetY, we are moving the list UP by LESS, which effectively pushes the content DOWN slightly.
+            track.style.transform = `translateY(-${targetY - visualCorrection}px)`;
+
+            lastVisibleName = `${winner.ovog} ${winner.ner}`;
+
+            // 6. FINISH
+            setTimeout(() => {
+                handleWin(winner);
+            }, duration);
         }
 
-        function selectFinalWinner() {
-            // 2. Хөгжим солих (Drumroll -> Tada)
+        function handleWin(winner) {
             try {
                 drumSound.pause();
                 winSound.currentTime = 0;
                 winSound.play();
-            } catch (e) { console.log("Audio error:", e); }
+            } catch (e) {}
 
-            const winnerIndex = Math.floor(Math.random() * participants.length);
-            const winner = participants[winnerIndex];
+            // Хасах логик
+            const foundIndex = participants.findIndex(p => p.ovog === winner.ovog && p.ner === winner.ner);
+            if (foundIndex > -1) {
+                participants.splice(foundIndex, 1);
+            }
+            
+            updateList();
+
             const currentPrize = prizesConfig[currentPrizeIndex];
-
-            // 3. ТОХИРГОО: Жагсаалтаас хасах ба Тоог шинэчлэх
-            participants.splice(winnerIndex, 1);
-            updateList(); // Энд "participants.length" өөрчлөгдсөн тул UI дээр тоо хасагдаж харагдана
-
-            // UI Display
-            const resultArea = document.getElementById('resultArea');
-            const winnerText = document.getElementById('winnerText');
+            const overlay = document.getElementById('finalResultOverlay');
+            const finalText = document.getElementById('finalWinnerText');
             
-            winnerText.innerText = `${winner.ovog} ${winner.ner}`;
-            winnerText.classList.remove('text-gray-600');
-            winnerText.classList.add('text-3xl', 'font-extrabold', 'text-indigo-700', 'winner-anim');
-            
-            resultArea.className = "w-full h-32 flex flex-col items-center justify-center bg-yellow-50 rounded-xl border-4 border-yellow-400 mb-4 shadow-[0_0_20px_rgba(250,204,21,0.6)] winner-anim";
+            overlay.classList.remove('hidden');
+            finalText.innerText = `${winner.ovog} ${winner.ner}`;
 
             addWinnerToTable(winner, currentPrize.name);
             fireConfetti();
@@ -265,10 +325,12 @@
                 const btn = document.getElementById('startBtn');
                 btn.disabled = false;
                 btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                btn.innerText = "Эхлүүлэх";
                 updatePrizeUI();
-            }, 2000); // Баяр хүргэх хэсэг жаахан удаан байх
+            }, 2000);
         }
 
+        // --- LIST & TABLE FUNCTIONS ---
         function addWinnerToTable(person, prizeName) {
             const tbody = document.getElementById('winnersTableBody');
             const emptyState = document.getElementById('emptyState');
@@ -306,7 +368,6 @@
             name.innerText = prize.name;
             counter.innerText = `Азтан: ${prize.current + 1} / ${prize.total}`;
             img.src = prize.img;
-            btn.innerText = `${prize.name} - Эхлүүлэх`;
             
             if (currentPrizeIndex === prizesConfig.length - 1) {
                 tag.innerText = "⭐ Супер Шагнал ⭐";
@@ -330,9 +391,7 @@
 
         function updateList() {
             const listEl = document.getElementById('participantList');
-            // ТООГ ШИНЭЧЛЭХ ХЭСЭГ
             document.getElementById('count').innerText = participants.length;
-            
             listEl.innerHTML = '';
             const displayLimit = participants.length > 100 ? 100 : participants.length;
             for(let i=0; i<displayLimit; i++) {
