@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сугалааны Азтан Шалгаруулах</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;500;700&display=swap');
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .winner-anim {
+            animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4 h-screen w-screen">
+
+    <audio id="drumSound" src="https://www.soundjay.com/misc/sounds/drum-roll-01.mp3" loop></audio>
+    <audio id="winSound" src="https://www.soundjay.com/misc/sounds/ta-da-01.mp3"></audio>
+
+    <div class="glass w-full max-w-7xl p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 h-[95vh] overflow-hidden">
+        
+        <div class="lg:col-span-3 flex flex-col h-full border-r pr-4 border-gray-200 space-y-3 overflow-hidden">
+            <h1 class="text-lg font-bold text-gray-800 border-b pb-2 flex-shrink-0">📝 Оролцогчид</h1>
+            
+            <div class="flex-shrink-0 space-y-3">
+                <label class="cursor-pointer bg-blue-50 text-blue-800 py-2 px-3 rounded text-center text-xs font-bold border border-blue-200 hover:bg-blue-100 transition block">
+                    📂 Excel файл нээх
+                    <input type="file" id="excelFile" accept=".xlsx, .xls" class="hidden" onchange="handleFileUpload(this)">
+                </label>
+
+                <div class="space-y-2">
+                    <input type="text" id="lastName" placeholder="Овог" class="w-full p-2 text-xs rounded border focus:ring-2 ring-blue-400 outline-none">
+                    <input type="text" id="firstName" placeholder="Нэр" class="w-full p-2 text-xs rounded border focus:ring-2 ring-blue-400 outline-none">
+                    <button onclick="addParticipant()" class="w-full bg-blue-600 text-white py-1 rounded text-sm hover:bg-blue-700 font-bold">+</button>
+                </div>
+
+                <div class="flex justify-between items-center mt-2 bg-gray-100 p-2 rounded">
+                    <span class="text-xs text-gray-500">Боломжит азтан:</span>
+                    <b id="count" class="text-lg text-blue-600">0</b>
+                </div>
+                <button onclick="clearList()" class="text-xs text-red-400 hover:text-red-600 underline w-full text-right">Жагсаалт цэвэрлэх</button>
+            </div>
+            
+            <div class="flex-grow overflow-y-auto bg-white rounded border border-gray-200 relative">
+                <ul id="participantList" class="divide-y divide-gray-100 absolute w-full top-0 left-0"></ul>
+            </div>
+        </div>
+
+        <div class="lg:col-span-5 flex flex-col items-center justify-center h-full relative py-2 overflow-hidden">
+            
+            <div class="text-center mb-4 w-full flex-shrink-0">
+                <span id="prizeTag" class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide mb-2 inline-block">
+                    Ээлжит шагнал
+                </span>
+                <div class="relative w-full h-56 mb-2 flex items-center justify-center">
+                    <img id="prizeImage" src="" alt="Prize" class="max-h-full max-w-full object-contain drop-shadow-xl transition-all duration-500 transform">
+                </div>
+                <h2 id="prizeName" class="text-xl font-bold text-gray-800 truncate px-2">...</h2>
+                <p id="prizeCounter" class="text-sm text-gray-500 font-medium">Үлдэгдэл: -</p>
+            </div>
+
+            <div id="resultArea" class="w-full h-32 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 mb-4 flex-shrink-0 transition-colors duration-300">
+                <p class="text-gray-400 text-xs uppercase tracking-widest mb-1">Азтан</p>
+                <h1 id="winnerText" class="text-3xl font-extrabold text-gray-400 truncate max-w-full px-4">???</h1>
+            </div>
+
+            <button onclick="startLottery()" id="startBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:scale-105 transition transform text-lg flex-shrink-0">
+                Эхлүүлэх
+            </button>
+        </div>
+
+        <div class="lg:col-span-4 flex flex-col h-full border-l pl-4 border-gray-200 bg-gray-50 -mr-6 pr-6 py-4 rounded-r-xl overflow-hidden">
+            <h3 class="text-md font-bold text-gray-700 uppercase mb-4 flex items-center gap-2 flex-shrink-0">
+                🏆 Азтануудын самбар
+            </h3>
+            <div class="flex-grow overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm relative">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-3 w-10">#</th>
+                            <th class="px-4 py-3">Шагнал</th>
+                            <th class="px-4 py-3">Азтан</th>
+                        </tr>
+                    </thead>
+                    <tbody id="winnersTableBody" class="divide-y divide-gray-200"></tbody>
+                </table>
+                <div id="emptyState" class="text-center py-10 text-gray-400 text-xs italic absolute w-full top-10">Одоогоор азтан тодроогүй байна.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- АУДИО УДИРДЛАГА ---
+        const drumSound = document.getElementById('drumSound');
+        const winSound = document.getElementById('winSound');
+
+        // 1. ТОХИРГОО
+        const prizesConfig = [
+            { id: 'nura', name: "Nura - Эрхийн бичиг", total: 3, current: 0, img: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=600&q=80" },
+            { id: 'pcmall', name: "PC Mall - 1 сая ₮", total: 2, current: 0, img: "https://images.unsplash.com/photo-1550009158-9ebf69056955?auto=format&fit=crop&w=600&q=80" },
+            { id: 'iphone', name: "iPhone 17", total: 2, current: 0, img: "https://images.unsplash.com/photo-1696446701796-da61225697cc?auto=format&fit=crop&w=600&q=80" },
+            { id: 'travel', name: "Аяллын эрх (Super)", total: 1, current: 0, img: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=600&q=80" }
+        ];
+
+        let currentPrizeIndex = 0;
+        let participants = [];
+        let winnersCount = 0;
+
+        updateList();
+        updatePrizeUI();
+
+        // --- EXCEL ---
+        function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    let added = 0;
+                    jsonData.forEach((row) => {
+                        let ovog = row['Ovog'] || row['ovog'] || row['Lastname'] || row['Овог'] || '';
+                        let ner = row['Ner'] || row['ner'] || row['Firstname'] || row['Нэр'] || '';
+                        if (!ner) {
+                            Object.keys(row).forEach(k => {
+                                const ck = k.trim().toLowerCase();
+                                if(['ner','firstname','нэр'].includes(ck)) ner = row[k];
+                                if(['ovog','lastname','овог'].includes(ck)) ovog = row[k];
+                            });
+                        }
+                        if (ner) {
+                            participants.push({ ovog: String(ovog).trim(), ner: String(ner).trim() });
+                            added++;
+                        }
+                    });
+                    if (added === 0) alert("Нэр олдсонгүй. Баганын нэр: 'Ovog', 'Ner' байх ёстой.");
+                    else {
+                        alert(`${added} хүн нэмэгдлээ.`);
+                        updateList();
+                    }
+                } catch (err) { alert("Файл уншихад алдаа гарлаа."); }
+                input.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- СУГАЛААНЫ ГОЛ ЛОГИК ---
+        let isSpinning = false;
+
+        function startLottery() {
+            if (participants.length === 0) {
+                alert("Оролцогч байхгүй байна!");
+                return;
+            }
+            if (isSpinning) return;
+            isSpinning = true;
+
+            // 1. Хөгжим эхлүүлэх (Drumroll)
+            try {
+                drumSound.currentTime = 0;
+                drumSound.volume = 1.0; // Дууг чангалах
+                drumSound.play();
+            } catch (e) { console.log("Audio error:", e); }
+
+            const btn = document.getElementById('startBtn');
+            const resultArea = document.getElementById('resultArea');
+            const winnerText = document.getElementById('winnerText');
+
+            btn.disabled = true;
+            btn.innerText = "🥁 Азтан тодрох гэж байна...";
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            
+            resultArea.className = "w-full h-32 flex flex-col items-center justify-center bg-white rounded-xl border-2 border-indigo-200 mb-4 shadow-inner";
+            winnerText.classList.remove('text-indigo-600', 'scale-125');
+            winnerText.classList.add('text-gray-600');
+
+            // Animation settings
+            let speed = 50; 
+            let startTime = Date.now();
+            let duration = 6500; // 6.5 секунд (Хөгжимтэй тааруулав)
+
+            function spin() {
+                const randomIndex = Math.floor(Math.random() * participants.length);
+                const p = participants[randomIndex];
+                winnerText.innerText = `${p.ovog} ${p.ner}`;
+
+                let elapsed = Date.now() - startTime;
+                if (elapsed > (duration - 3000)) speed += 50; // Сүүлийн 3 секундэд удаашрах
+
+                if (elapsed < duration) {
+                    setTimeout(spin, speed);
+                } else {
+                    selectFinalWinner();
+                }
+            }
+            spin();
+        }
+
+        function selectFinalWinner() {
+            // 2. Хөгжим солих (Drumroll -> Tada)
+            try {
+                drumSound.pause();
+                winSound.currentTime = 0;
+                winSound.play();
+            } catch (e) { console.log("Audio error:", e); }
+
+            const winnerIndex = Math.floor(Math.random() * participants.length);
+            const winner = participants[winnerIndex];
+            const currentPrize = prizesConfig[currentPrizeIndex];
+
+            // 3. ТОХИРГОО: Жагсаалтаас хасах ба Тоог шинэчлэх
+            participants.splice(winnerIndex, 1);
+            updateList(); // Энд "participants.length" өөрчлөгдсөн тул UI дээр тоо хасагдаж харагдана
+
+            // UI Display
+            const resultArea = document.getElementById('resultArea');
+            const winnerText = document.getElementById('winnerText');
+            
+            winnerText.innerText = `${winner.ovog} ${winner.ner}`;
+            winnerText.classList.remove('text-gray-600');
+            winnerText.classList.add('text-3xl', 'font-extrabold', 'text-indigo-700', 'winner-anim');
+            
+            resultArea.className = "w-full h-32 flex flex-col items-center justify-center bg-yellow-50 rounded-xl border-4 border-yellow-400 mb-4 shadow-[0_0_20px_rgba(250,204,21,0.6)] winner-anim";
+
+            addWinnerToTable(winner, currentPrize.name);
+            fireConfetti();
+
+            currentPrize.current++; 
+            winnersCount++;
+            if (currentPrize.current >= currentPrize.total) {
+                currentPrizeIndex++;
+            }
+
+            isSpinning = false;
+            
+            setTimeout(() => {
+                const btn = document.getElementById('startBtn');
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                updatePrizeUI();
+            }, 2000); // Баяр хүргэх хэсэг жаахан удаан байх
+        }
+
+        function addWinnerToTable(person, prizeName) {
+            const tbody = document.getElementById('winnersTableBody');
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) emptyState.style.display = 'none';
+
+            const tr = document.createElement('tr');
+            tr.className = "winner-anim hover:bg-gray-50 border-b";
+            tr.innerHTML = `
+                <td class="px-4 py-3 font-bold text-gray-500">${winnersCount + 1}</td>
+                <td class="px-4 py-3 text-indigo-600 font-semibold text-xs">${prizeName}</td>
+                <td class="px-4 py-3 font-bold text-gray-800">${person.ovog} ${person.ner}</td>
+            `;
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+
+        function updatePrizeUI() {
+            const prize = prizesConfig[currentPrizeIndex];
+            const btn = document.getElementById('startBtn');
+            const img = document.getElementById('prizeImage');
+            const name = document.getElementById('prizeName');
+            const counter = document.getElementById('prizeCounter');
+            const tag = document.getElementById('prizeTag');
+
+            if (!prize) {
+                name.innerText = "🎉 БҮХ АЗТАН ТОДОРЛОО!";
+                counter.innerText = "";
+                img.src = "https://cdn-icons-png.flaticon.com/512/864/864837.png";
+                tag.style.display = 'none';
+                btn.innerText = "Баяр хүргэе!";
+                btn.disabled = true;
+                btn.className = "w-full bg-gray-400 text-white font-bold py-4 rounded-xl shadow-none cursor-not-allowed";
+                return;
+            }
+
+            name.innerText = prize.name;
+            counter.innerText = `Азтан: ${prize.current + 1} / ${prize.total}`;
+            img.src = prize.img;
+            btn.innerText = `${prize.name} - Эхлүүлэх`;
+            
+            if (currentPrizeIndex === prizesConfig.length - 1) {
+                tag.innerText = "⭐ Супер Шагнал ⭐";
+                tag.className = "bg-yellow-400 text-yellow-900 text-sm font-bold px-4 py-1 rounded-full uppercase animate-bounce inline-block mb-2";
+            } else {
+                tag.innerText = "Ээлжит шагнал";
+                tag.className = "bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-full uppercase inline-block mb-2";
+            }
+        }
+
+        function addParticipant() {
+            const ln = document.getElementById('lastName').value.trim();
+            const fn = document.getElementById('firstName').value.trim();
+            if (ln && fn) {
+                participants.push({ ovog: ln, ner: fn });
+                document.getElementById('lastName').value = '';
+                document.getElementById('firstName').value = '';
+                updateList();
+            }
+        }
+
+        function updateList() {
+            const listEl = document.getElementById('participantList');
+            // ТООГ ШИНЭЧЛЭХ ХЭСЭГ
+            document.getElementById('count').innerText = participants.length;
+            
+            listEl.innerHTML = '';
+            const displayLimit = participants.length > 100 ? 100 : participants.length;
+            for(let i=0; i<displayLimit; i++) {
+                const p = participants[i];
+                const li = document.createElement('li');
+                li.className = "p-2 text-xs flex justify-between hover:bg-gray-50";
+                li.innerHTML = `<span>${i+1}. ${p.ovog} ${p.ner}</span>`;
+                listEl.appendChild(li);
+            }
+            if (participants.length > 100) {
+                const li = document.createElement('li');
+                li.className = "p-2 text-xs text-center text-gray-400 italic";
+                li.innerText = `... цаана нь ${participants.length - 100} хүн байна ...`;
+                listEl.appendChild(li);
+            }
+        }
+
+        function clearList() { if(confirm("Цэвэрлэх үү?")) { participants = []; updateList(); }}
+
+        function fireConfetti() {
+            var duration = 3000; var end = Date.now() + duration;
+            (function frame() {
+                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 } });
+                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 } });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
+        }
+    </script>
+</body>
+</html>
