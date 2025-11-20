@@ -205,88 +205,101 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // --- IMPROVED WHEEL LOGIC (FIXED STOP POINT) ---
+// --- IMPROVED WHEEL LOGIC (FIXED STOP POINT) ---
         
-        function startLottery() {
-            if (participants.length === 0) {
-                alert("Оролцогч байхгүй байна!");
-                return;
+function startLottery() {
+    if (participants.length === 0) {
+        alert("Оролцогч байхгүй байна!");
+        return;
+    }
+    // Хэрэв ганцхан хүн үлдсэн бол давхардалтыг шалгах шаардлагагүй (заавал давтагдана)
+    if (participants.length === 1) {
+        // Тохиромжтой болгохын тулд зүгээр л шууд ялагчийг тодруулж болно.
+        // Гэхдээ одоогоор animation-ийг хэвээр үлдээе.
+    }
+    
+    if (isSpinning) return;
+    isSpinning = true;
+
+    try {
+        drumSound.currentTime = 0;
+        drumSound.volume = 1.0;
+        drumSound.play();
+    } catch (e) {}
+
+    const btn = document.getElementById('startBtn');
+    btn.disabled = true;
+    btn.innerText = "🥁 ...";
+    btn.classList.add('opacity-75', 'cursor-not-allowed');
+    
+    document.getElementById('finalResultOverlay').classList.add('hidden');
+
+    // 1. Ялагчийг сонгох
+    const winnerIndex = Math.floor(Math.random() * participants.length);
+    const winner = participants[winnerIndex];
+
+    // 2. Animation бэлтгэл
+    const track = document.getElementById('wheelTrack');
+    const ITEM_HEIGHT = 60;
+    const SPINS_COUNT = 100; 
+    
+    // 3. HTML String угсрах
+    let html = '';
+    let lastRandomIndex = -1; // Сүүлд сонгогдсон хүний index (давхардлыг шалгах зорилгоор)
+    
+    // A. ЭХНИЙ ITEM: Одоо харагдаж байгаа нэрийг эхэнд нь тавина
+    html += `<div class="wheel-item text-gray-500">${lastVisibleName}</div>`;
+    
+    // B. ДУНДЫН ITEMS: Санамсаргүй нэрс (Давхардалгүйгээр)
+    for (let i = 0; i < SPINS_COUNT; i++) {
+        let rIndex = -1;
+        // Өмнөх нэртэй ижил index сонгогдвол дахин сонгоно (Хэрэв 1-ээс олон оролцогч байгаа бол)
+        if (participants.length > 1) {
+            while (rIndex === lastRandomIndex || rIndex === -1) {
+                rIndex = Math.floor(Math.random() * participants.length);
             }
-            if (isSpinning) return;
-            isSpinning = true;
-
-            try {
-                drumSound.currentTime = 0;
-                drumSound.volume = 1.0;
-                drumSound.play();
-            } catch (e) {}
-
-            const btn = document.getElementById('startBtn');
-            btn.disabled = true;
-            btn.innerText = "🥁 ...";
-            btn.classList.add('opacity-75', 'cursor-not-allowed');
-            
-            document.getElementById('finalResultOverlay').classList.add('hidden');
-
-            // 1. Ялагчийг сонгох
-            const winnerIndex = Math.floor(Math.random() * participants.length);
-            const winner = participants[winnerIndex];
-
-            // 2. Animation бэлтгэл
-            const track = document.getElementById('wheelTrack');
-            const ITEM_HEIGHT = 60;
-            const SPINS_COUNT = 100; // Increased random spins 
-            
-            // 3. HTML String угсрах
-            let html = '';
-            
-            // A. ЭХНИЙ ITEM: Одоо харагдаж байгаа нэрийг эхэнд нь тавина
-            html += `<div class="wheel-item text-gray-500">${lastVisibleName}</div>`;
-            
-            // B. ДУНДЫН ITEMS: Санамсаргүй нэрс
-            for (let i = 0; i < SPINS_COUNT; i++) {
-                const r = participants[Math.floor(Math.random() * participants.length)];
-                html += `<div class="wheel-item opacity-60">${r.ovog} ${r.ner}</div>`;
-            }
-
-            // C. ТӨГСГӨЛИЙН ITEM: Ялагч
-            html += `<div class="wheel-item font-bold text-indigo-800 scale-110">${winner.ovog} ${winner.ner}</div>`;
-            
-            // D. BUFFER ITEMS: Ялагчийн дараа харагдах нэрийг багтаахын тулд нэмнэ
-            // Энд нэг жинхэнэ оролцогчийн нэрийг нэмж харуулъя (тусгайлан сонгох шаардлагагүй, random байж болно)
-            const nextP = participants[Math.floor(Math.random() * participants.length)];
-            html += `<div class="wheel-item text-sm">${nextP.ovog} ${nextP.ner}</div>`;
-            html += `<div class="wheel-item"></div><div class="wheel-item"></div>`; // 2 хоосон зай
-
-            // 4. DOM шинэчлэх
-            track.style.transition = 'none';
-            track.style.transform = 'translateY(0px)';
-            track.innerHTML = html;
-
-            void track.offsetHeight; // FORCE REFLOW
-
-            // 5. START ANIMATION
-            const duration = 6000; // 6 sec
-            
-            // 1 (LastVisible) + 100 (Randoms) = 101 items before the winner
-            const ITEMS_BEFORE_WINNER = SPINS_COUNT + 1; 
-            const targetY = ITEMS_BEFORE_WINNER * ITEM_HEIGHT; // 6060px
-
-            // VISUAL CORRECTION: 5px-ээр доошлуулах нь дараах нэрийг тасралтгүй харагдуулна
-            const visualCorrection = 5; 
-
-            track.style.transition = `transform ${duration}ms cubic-bezier(0.2, 0.8, 0.2, 1)`; 
-            // - (targetY - visualCorrection) - negative transform moves the content UP
-            // By decreasing targetY, we are moving the list UP by LESS, which effectively pushes the content DOWN slightly.
-            track.style.transform = `translateY(-${targetY - visualCorrection}px)`;
-
-            lastVisibleName = `${winner.ovog} ${winner.ner}`;
-
-            // 6. FINISH
-            setTimeout(() => {
-                handleWin(winner);
-            }, duration);
+        } else {
+             rIndex = 0; // Ганцхан хүн үлдсэн бол
         }
+
+        const r = participants[rIndex];
+        html += `<div class="wheel-item opacity-60">${r.ovog} ${r.ner}</div>`;
+        
+        // Сүүлд сонгогдсон index-ийг хадгална
+        lastRandomIndex = rIndex; 
+    }
+
+    // C. ТӨГСГӨЛИЙН ITEM: Ялагч
+    html += `<div class="wheel-item font-bold text-indigo-800 scale-110">${winner.ovog} ${winner.ner}</div>`;
+    
+    // D. BUFFER ITEMS: Ялагчийн дараа харагдах нэрийг багтаахын тулд нэмнэ
+    const nextP = participants[Math.floor(Math.random() * participants.length)];
+    html += `<div class="wheel-item text-sm">${nextP.ovog} ${nextP.ner}</div>`;
+    html += `<div class="wheel-item"></div><div class="wheel-item"></div>`; // 2 хоосон зай
+
+    // 4. DOM шинэчлэх
+    const ITEMS_BEFORE_WINNER = SPINS_COUNT + 1; 
+    const targetY = ITEMS_BEFORE_WINNER * ITEM_HEIGHT; 
+    const visualCorrection = 5; 
+
+    track.style.transition = 'none';
+    track.style.transform = 'translateY(0px)';
+    track.innerHTML = html;
+
+    void track.offsetHeight; // FORCE REFLOW
+
+    // 5. START ANIMATION
+    const duration = 6000; 
+    track.style.transition = `transform ${duration}ms cubic-bezier(0.2, 0.8, 0.2, 1)`; 
+    track.style.transform = `translateY(-${targetY - visualCorrection}px)`;
+
+    lastVisibleName = `${winner.ovog} ${winner.ner}`;
+
+    // 6. FINISH
+    setTimeout(() => {
+        handleWin(winner);
+    }, duration);
+}
 
         function handleWin(winner) {
             try {
